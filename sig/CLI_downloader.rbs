@@ -1,4 +1,26 @@
 module CLIDownloader
   VERSION: String
-  # See the writing guide of rbs: https://github.com/ruby/rbs#guides
+
+  class Error < ::StandardError
+  end
+
+  class Tagger
+    TAG_SIGNATURE: String
+    TAG_SIZE: Integer
+    SUPPORTED_EXTENSIONS: Array[String]
+    METADATA_KEYS: Array[Symbol]
+    GENRES: Array[String]
+
+    def tag: (String file_path, ?::Hash[Symbol | String, untyped] metadata) -> ::Hash[Symbol, untyped]
+    def write: (String file_path, ?::Hash[Symbol | String, untyped] metadata) -> ::Hash[Symbol, untyped]
+    def update: (String file_path, ?::Hash[Symbol | String, untyped] metadata) -> ::Hash[Symbol, untyped]
+    def read: (String file_path) -> ::Hash[Symbol, untyped]
+    def tag_present?: (String file_path) -> bool
+  end
+
+  class Tagger::TaggerError < ::StandardError
+  end
+
+  class Tagger::UnsupportedFormatError < Tagger::TaggerError
+  end
 end
