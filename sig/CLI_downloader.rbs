@@ -23,4 +23,41 @@ module CLIDownloader
 
   class Tagger::UnsupportedFormatError < Tagger::TaggerError
   end
+
+  class Fetcher
+    DEFAULT_OUTPUT_TEMPLATE: String
+
+    class Result < ::Struct
+      attr_accessor source_url: String
+      attr_accessor file_path: String
+      attr_accessor strategy: Symbol
+      attr_accessor stdout: String
+      attr_accessor stderr: String
+
+      def filename: () -> String
+    end
+
+    def initialize: (?output_directory: String, ?yt_dlp_bin: String, ?runner: untyped) -> void
+    def download: (
+      String url,
+      ?filename: String?,
+      ?output_template: String,
+      ?force_strategy: Symbol?,
+      ?headers: ::Hash[String | Symbol, untyped]
+    ) -> Result
+  end
+
+  class Fetcher::FetcherError < Error
+  end
+
+  class Fetcher::InvalidURLError < Fetcher::FetcherError
+  end
+
+  class Fetcher::DownloadFailedError < Fetcher::FetcherError
+    attr_reader exit_status: Integer?
+  end
+
+  class Fetcher::MissingDependencyError < Fetcher::FetcherError
+  end
+
 end
