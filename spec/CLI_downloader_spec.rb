@@ -8,4 +8,8 @@ RSpec.describe CLIDownloader do
   it "loads organizer API" do
     expect(CLIDownloader::Organizer).to be_a(Class)
   end
+
+  it "loads fetcher API" do
+    expect(CLIDownloader::Fetcher).to be_a(Class)
+  end
 end
