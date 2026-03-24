@@ -60,4 +60,22 @@ module CLIDownloader
   class Fetcher::MissingDependencyError < Fetcher::FetcherError
   end
 
+  class CLI
+    def self.start: (
+      ?::Array[String] argv,
+      ?out: untyped,
+      ?err: untyped,
+      ?fetcher_factory: singleton(Fetcher)
+    ) -> Integer
+
+    def initialize: (
+      ::Array[String] argv,
+      out: untyped,
+      err: untyped,
+      fetcher_factory: singleton(Fetcher)
+    ) -> void
+
+    def start: () -> Integer
+  end
+
 end

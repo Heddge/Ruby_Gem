@@ -1,35 +1,64 @@
-# CLIDownloader
+# CLI Downloader
 
-TODO: Delete this and the text below, and describe your gem
+CLI Downloader is a Ruby gem for downloading media and preparing files for further processing.
 
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/CLI_downloader`. To experiment with that code, run `bin/console` for an interactive prompt.
+## Features
+
+- `Fetcher`: downloads media from YouTube/SoundCloud through `yt-dlp` or direct URLs through HTTP.
+- `Tagger`: writes and updates ID3v1 tags for MP3 files.
+- `Organizer`: moves files into a predictable folder structure and safely renames files.
+- `CLI`: command line entrypoint for quick downloads.
 
 ## Installation
 
-TODO: Replace `UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG` with your gem name right after releasing it to RubyGems.org. Please do not do it earlier due to security reasons. Alternatively, replace this section with instructions to install your gem from git if you don't plan to release to RubyGems.org.
-
-Install the gem and add to the application's Gemfile by executing:
-
 ```bash
-bundle add UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
+bundle install
 ```
 
-If bundler is not being used to manage dependencies, install the gem by executing:
+## Quick Start
+
+### CLI mode
 
 ```bash
-gem install UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
+ruby exe/cli_downloader -o downloads https://youtu.be/dQw4w9WgXcQ
 ```
 
-## Usage
+Options:
 
-TODO: Write usage instructions here
+- `-o, --output DIR`: output directory for downloaded files.
+- `-n, --name FILE`: custom output filename/template.
+- `-s, --strategy STRATEGY`: force strategy (`http` or `yt_dlp`).
+- `--header KEY:VALUE`: add HTTP headers for direct URL mode.
 
-## Development
+### Ruby API
 
-After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake spec` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
+```ruby
+require "CLI_downloader"
 
-To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the version number in `version.rb`, and then run `bundle exec rake release`, which will create a git tag for the version, push git commits and the created tag, and push the `.gem` file to [rubygems.org](https://rubygems.org).
+fetcher = CLIDownloader::Fetcher.new(output_directory: "downloads")
+result = fetcher.download("https://example.com/music/track.mp3")
+puts result.file_path
 
-## Contributing
+tagger = CLIDownloader::Tagger.new
+tagger.update(result.file_path, artist: "Artist", album: "Album", year: 2025)
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/[USERNAME]/CLI_downloader.
+organizer = CLIDownloader::Organizer.new(base_directory: "library")
+organized = organizer.organize(source_path: result.file_path, metadata: {
+  artist: "Artist",
+  album: "Album",
+  year: 2025,
+  title: "Track"
+})
+puts organized.destination_path
+```
+
+## Running Tests
+
+```bash
+bundle exec rspec
+```
+
+## Notes
+
+- `yt-dlp` must be installed and available in `PATH` for YouTube/SoundCloud downloads.
+- Direct URL downloads work without `yt-dlp`.

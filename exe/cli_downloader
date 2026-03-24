@@ -1,0 +1,10 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "CLI_downloader"
+
+exit_code = catch(:help_requested) do
+  CLIDownloader::CLI.start
+end
+
+exit(exit_code || 0)
