@@ -5,7 +5,7 @@ RSpec.describe CLIDownloader do
     expect(CLIDownloader::VERSION).not_to be nil
   end
 
-  it "does something useful" do
-    expect(false).to eq(true)
+  it "loads organizer API" do
+    expect(CLIDownloader::Organizer).to be_a(Class)
   end
 end
