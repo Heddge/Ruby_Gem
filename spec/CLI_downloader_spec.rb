@@ -12,4 +12,7 @@ RSpec.describe CLIDownloader do
   it "loads fetcher API" do
     expect(CLIDownloader::Fetcher).to be_a(Class)
   end
+  it "loads tagger API" do
+    expect(CLIDownloader::Tagger).to be_a(Class)
+  end
 end
