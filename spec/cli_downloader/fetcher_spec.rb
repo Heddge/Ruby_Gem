@@ -7,6 +7,22 @@ RSpec.describe CLIDownloader::Fetcher do
     def is_a?(klass)
       klass == Net::HTTPSuccess || super
     end
+
+    def [](_key)
+      nil
+    end
+  end
+
+  FakeTypedSuccessResponse = Struct.new(:code, :body, :content_type) do
+    def is_a?(klass)
+      klass == Net::HTTPSuccess || super
+    end
+
+    def [](key)
+      return content_type if key.downcase == "content-type"
+
+      nil
+    end
   end
 
   FakeErrorResponse = Struct.new(:code) do
@@ -16,6 +32,18 @@ RSpec.describe CLIDownloader::Fetcher do
 
     def body
       ""
+    end
+  end
+
+  FakeRedirectResponse = Struct.new(:code, :location) do
+    def is_a?(klass)
+      klass == Net::HTTPRedirection || super
+    end
+
+    def [](key)
+      return location if key.downcase == "location"
+
+      nil
     end
   end
 
@@ -64,6 +92,60 @@ RSpec.describe CLIDownloader::Fetcher do
     expect(result.strategy).to eq(:http)
     expect(result.file_path).to eq(File.join(@workspace, "video.mp4"))
     expect(File.binread(result.file_path)).to eq("video-bytes")
+  end
+
+  it "adds an mp3 extension from HTTP content type" do
+    fetcher = described_class.new(output_directory: @workspace)
+    response = FakeTypedSuccessResponse.new("200", "audio-bytes", "audio/mpeg")
+    http = instance_double(Net::HTTP)
+
+    allow(http).to receive(:request).and_return(response)
+    allow(Net::HTTP).to receive(:start).with("example.com", 443, use_ssl: true).and_yield(http)
+
+    result = fetcher.download("https://example.com/song/72911331")
+
+    expect(result.file_path).to eq(File.join(@workspace, "72911331.mp3"))
+    expect(File.binread(result.file_path)).to eq("audio-bytes")
+  end
+
+  it "extracts an mp3 link when HTTP response is an HTML page" do
+    fetcher = described_class.new(output_directory: @workspace)
+    page = FakeTypedSuccessResponse.new(
+      "200",
+      '<a href="/get/music/20210416/song.mp3">download</a>',
+      "text/html"
+    )
+    response = FakeTypedSuccessResponse.new("200", "audio-bytes", "audio/mpeg")
+    first_http = instance_double(Net::HTTP)
+    second_http = instance_double(Net::HTTP)
+
+    allow(first_http).to receive(:request).and_return(page)
+    allow(second_http).to receive(:request).and_return(response)
+    allow(Net::HTTP).to receive(:start).with("example.com", 443, use_ssl: true).and_yield(first_http)
+    allow(Net::HTTP).to receive(:start).with("example.com", 443, use_ssl: true).and_yield(second_http)
+
+    result = fetcher.download("https://example.com/song/72911331")
+
+    expect(result.file_path).to eq(File.join(@workspace, "72911331.mp3"))
+    expect(File.binread(result.file_path)).to eq("audio-bytes")
+  end
+
+  it "follows HTTP redirects" do
+    fetcher = described_class.new(output_directory: @workspace)
+    redirect = FakeRedirectResponse.new("302", "https://cdn.example.com/media/song.mp3")
+    response = FakeSuccessResponse.new("200", "audio-bytes")
+    first_http = instance_double(Net::HTTP)
+    second_http = instance_double(Net::HTTP)
+
+    allow(first_http).to receive(:request).and_return(redirect)
+    allow(second_http).to receive(:request).and_return(response)
+    allow(Net::HTTP).to receive(:start).with("example.com", 443, use_ssl: true).and_yield(first_http)
+    allow(Net::HTTP).to receive(:start).with("cdn.example.com", 443, use_ssl: true).and_yield(second_http)
+
+    result = fetcher.download("https://example.com/get/music/song.mp3")
+
+    expect(result.file_path).to eq(File.join(@workspace, "song.mp3"))
+    expect(File.binread(result.file_path)).to eq("audio-bytes")
   end
 
   it "raises a clear error when yt-dlp is missing" do

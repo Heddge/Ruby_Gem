@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "fileutils"
+require "cgi"
 require "net/http"
 require "open3"
 require "pathname"
@@ -12,6 +13,19 @@ module CLIDownloader
     SOUNDCLOUD_HOSTS = ["soundcloud.com", "www.soundcloud.com", "m.soundcloud.com"].freeze
     REMOTE_STRATEGY_HOSTS = (YOUTUBE_HOSTS + SOUNDCLOUD_HOSTS).freeze
     DEFAULT_OUTPUT_TEMPLATE = "%(title)s.%(ext)s"
+    MAX_HTTP_REDIRECTS = 5
+    CONTENT_TYPE_EXTENSIONS = {
+      "audio/mpeg" => ".mp3",
+      "audio/mp3" => ".mp3",
+      "audio/x-mpeg" => ".mp3",
+      "audio/x-mp3" => ".mp3",
+      "video/mp4" => ".mp4",
+      "image/jpeg" => ".jpg",
+      "image/png" => ".png"
+    }.freeze
+    DEFAULT_HTTP_HEADERS = {
+      "User-Agent" => "Mozilla/5.0"
+    }.freeze
 
     Result = Struct.new(:source_url, :file_path, :strategy, :stdout, :stderr, keyword_init: true) do
       def filename
@@ -133,19 +147,32 @@ module CLIDownloader
       raise MissingDependencyError, "yt-dlp executable not found: #{yt_dlp_bin}"
     end
 
-    def download_with_http(uri, filename:, headers: {})
+    def download_with_http(uri, filename:, headers: {}, redirects_left: MAX_HTTP_REDIRECTS)
       target_filename = normalized_filename(filename) || infer_filename_from_uri(uri)
       destination = File.join(output_directory, target_filename)
 
       response_body = nil
       response_code = nil
+      content_type = nil
 
       Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == "https") do |http|
         request = Net::HTTP::Get.new(uri)
-        headers.each { |key, value| request[key] = value.to_s }
+        DEFAULT_HTTP_HEADERS.merge(headers).each { |key, value| request[key] = value.to_s }
 
         response = http.request(request)
         response_code = response.code.to_i
+
+        if response.is_a?(Net::HTTPRedirection)
+          raise DownloadFailedError, "too many HTTP redirects for #{uri}" if redirects_left <= 0
+
+          next_uri = URI.join(uri, response["location"])
+          return download_with_http(
+            next_uri,
+            filename: filename,
+            headers: headers,
+            redirects_left: redirects_left - 1
+          )
+        end
 
         unless response.is_a?(Net::HTTPSuccess)
           raise DownloadFailedError.new(
@@ -155,8 +182,22 @@ module CLIDownloader
         end
 
         response_body = response.body
+        content_type = response["content-type"].to_s.split(";").first.to_s.downcase
       end
 
+      if html_response?(response_body, content_type)
+        next_uri = extract_media_uri(response_body, uri)
+        return download_with_http(
+          next_uri,
+          filename: filename,
+          headers: headers.merge("Referer" => uri.to_s),
+          redirects_left: redirects_left - 1
+        ) if next_uri && redirects_left.positive?
+
+        raise DownloadFailedError, "download returned HTML page instead of media file for #{uri}"
+      end
+
+      destination = with_extension_from_content_type(destination, content_type)
       File.binwrite(destination, response_body.to_s)
 
       Result.new(
@@ -210,6 +251,26 @@ module CLIDownloader
       return basename unless basename.nil? || basename.empty? || basename == "/"
 
       "downloaded_file"
+    end
+
+    def with_extension_from_content_type(path, content_type)
+      extension = CONTENT_TYPE_EXTENSIONS[content_type]
+      return path if extension.nil? || !File.extname(path).empty?
+
+      "#{path}#{extension}"
+    end
+
+    def html_response?(body, content_type)
+      content_type.include?("html") || body.to_s.lstrip.start_with?("<!DOCTYPE html", "<html")
+    end
+
+    def extract_media_uri(body, base_uri)
+      html = CGI.unescapeHTML(body.to_s).gsub("\\/", "/")
+      match = html.match(%r{(?:"|')(?<url>(?:https?:)?//[^"']+\.mp3[^"']*)(?:"|')}) ||
+              html.match(%r{(?:"|')(?<url>/[^"']+\.mp3[^"']*)(?:"|')})
+      return nil unless match
+
+      URI.join(base_uri, match[:url])
     end
   end
 end
